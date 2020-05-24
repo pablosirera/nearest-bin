@@ -32,7 +32,7 @@ export default {
   data: () => ({
     allBins: [],
     url: 'http://{s}.tile.osm.org/{z}/{x}/{y}.png',
-    zoom: 20,
+    zoom: 19,
     currentPosition: [39.4559488, -0.36372479999999996]
   }),
   created() {
@@ -47,6 +47,18 @@ export default {
           position.coords.latitude,
           position.coords.longitude
         ]
+
+        this.$L
+          .circleMarker(
+            {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            },
+            {
+              color: '#3388ff'
+            }
+          )
+          .addTo(this.$refs.map.mapObject)
       })
     }
   },
@@ -55,13 +67,24 @@ export default {
       const binsData = await this.$axios.get(
         'http://mapas.valencia.es/lanzadera/opendata/Res_papeleras/CSV'
       )
-      this.allBins = binsData.data
-      this.formatBins(this.allBins)
+      const bins = binsData.data
+      this.formatBins(bins)
     },
     formatBins(allBins) {
-      // eslint-disable-next-line no-console
-      console.log(Papa.parse(allBins, { header: true, delimiter: ';' }))
+      const bins = Papa.parse(allBins, { header: true, delimiter: ';' })
+      this.allBins = bins.data
     }
+    // convertUTMToLatLng(pointX, pointY) {
+    //   if (pointX && pointY) {
+    //     const point = this.$L.point(pointX, pointY)
+
+    //     const pointLatLng = this.$refs.map.mapObject.layerPointToLatLng(point)
+
+    //     return this.$L.latLng(pointLatLng)
+    //   }
+
+    //   return { lat: '', lng: '' }
+    // }
   }
 }
 </script>
