@@ -22,10 +22,10 @@
           :imperial="false"
           :metric="true"
         ></l-control-scale>
-        <!-- <l-geo-json
+        <l-geo-json
           :geojson="geojson"
           :options-style="styleFunction"
-        ></l-geo-json> -->
+        ></l-geo-json>
         <!-- <l-circle
           :lat-lng="center"
           :radius="circle.radius"
@@ -57,6 +57,24 @@
           >
           </l-icon>
         </l-marker>
+        <l-marker
+          v-if="nearBin && nearBin.lat"
+          :lat-lng.sync="nearBin"
+          :radius="circlemarker.radius"
+          :stroke="circle.stroke"
+          :draggable="draggable"
+          :fill-color="circlemarker.fillColor"
+          :fill-opacity="circlemarker.fillOpacity"
+        >
+          <l-icon
+            :icon-size="dynamicSize"
+            :icon-anchor="dynamicAnchor"
+            icon-url="/basura.png"
+          />
+          <!-- <l-tooltip :options="{ permanent: true, direction: 'top' }">
+            {{ nearBin.distance }}
+          </l-tooltip> -->
+        </l-marker>
       </l-map>
     </div>
   </div>
@@ -64,14 +82,7 @@
 
 <script>
 import Papa from 'papaparse'
-import {
-  LMap,
-  LTileLayer,
-  LMarker,
-  LControlScale,
-  // LCircleMarker,
-  LIcon
-} from 'vue2-leaflet'
+import { LMap, LTileLayer, LMarker, LControlScale, LIcon } from 'vue2-leaflet'
 import { latLng } from 'leaflet'
 
 export default {
@@ -80,7 +91,6 @@ export default {
     LTileLayer,
     LMarker,
     LControlScale,
-    // LCircleMarker,
     LIcon
   },
   data: () => ({
@@ -103,7 +113,7 @@ export default {
     },
     circlemarker: {
       center: latLng(39.4559488, -0.36372479999999996),
-      radius: 6,
+      radius: 8,
       stroke: false,
       fillColor: '#006DDC',
       fillOpacity: 1
@@ -112,7 +122,8 @@ export default {
       zoomSnap: 0.5
     },
     iconSize: 34,
-    showMap: true
+    showMap: true,
+    nearBin: { lat: '', lng: '' }
   }),
   computed: {
     dynamicSize() {
@@ -169,6 +180,61 @@ export default {
     formatBins(allBins) {
       const bins = Papa.parse(allBins, { header: true, delimiter: ';' })
       this.allBins = bins.data
+      this.getNearestBin()
+    },
+    async getNearestBin() {
+      const { data } = await this.convertToUTM(this.center.lat, this.center.lng)
+      this.nearBin = this.findShortestDistance(
+        {
+          X: data[0].easting,
+          Y: data[0].northing
+        },
+        this.allBins
+      )
+      const binWithLatLng = await this.convertToLatLng(
+        this.nearBin.X,
+        this.nearBin.Y
+      )
+      this.nearBin = {
+        ...this.nearBin,
+        ...latLng(binWithLatLng.data.srcLat, binWithLatLng.data.srcLon)
+      }
+    },
+    findShortestDistance(myPosition, positions) {
+      let shortestDistance = this.calculateDistance(myPosition, positions[0])
+      let nearBin = positions[0]
+      positions.forEach((position) => {
+        const distance = this.calculateDistance(myPosition, position)
+        if (distance < shortestDistance) {
+          shortestDistance = distance
+          nearBin = position
+        }
+      })
+      return nearBin
+    },
+    calculateDistance(pointOne, pointTwo) {
+      const diffX = parseFloat(pointOne.X) - parseFloat(pointTwo.X)
+      const diffY = parseFloat(pointOne.Y) - parseFloat(pointTwo.Y)
+
+      return diffX * diffX + diffY * diffY
+    },
+    async convertToUTM(lat, lng) {
+      try {
+        return await this.$axios.get(
+          `https://www.latlong.net/dec2utm.php?lat=${lat}&long=${lng}`
+        )
+      } catch (error) {
+        console.error(error)
+      }
+    },
+    async convertToLatLng(pointX, pointY) {
+      try {
+        return await this.$axios.get(
+          `https://geodesy.noaa.gov/api/ncat/utm?utmZone=30&northing=${pointY}&easting=${pointX}&hemi=N&a=6378160.0&invf=298.25`
+        )
+      } catch (error) {
+        console.error(error)
+      }
     }
   }
 }
