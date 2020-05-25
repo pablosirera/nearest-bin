@@ -177,10 +177,9 @@ export default {
       })
     },
     async initData() {
-      const binsData = await this.$axios.get(
-        'http://mapas.valencia.es/lanzadera/opendata/Res_papeleras/CSV'
-      )
-      const bins = binsData.data
+      const host = window.location.href
+      const binsData = await fetch(host + 'bins.csv')
+      const bins = await binsData.text()
       this.formatBins(bins)
     },
     formatBins(allBins) {
