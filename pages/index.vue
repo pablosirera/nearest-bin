@@ -58,8 +58,8 @@
           </l-icon>
         </l-marker>
         <l-marker
-          v-if="nearBin && nearBin.lat"
-          :lat-lng.sync="nearBin"
+          v-if="nearestBin && nearestBin.lat"
+          :lat-lng.sync="nearestBin"
           :radius="circlemarker.radius"
           :stroke="circle.stroke"
           :draggable="draggable"
@@ -69,11 +69,12 @@
           <l-icon
             :icon-size="dynamicSize"
             :icon-anchor="dynamicAnchor"
+            :tooltip-anchor="tooltipAnchor"
             icon-url="/basura.png"
           />
-          <!-- <l-tooltip :options="{ permanent: true, direction: 'top' }">
-            {{ nearBin.distance }}
-          </l-tooltip> -->
+          <l-tooltip :options="{ permanent: true, direction: 'top' }">
+            {{ parseInt(nearestBin.distance) }} m.
+          </l-tooltip>
         </l-marker>
       </l-map>
     </div>
@@ -123,14 +124,17 @@ export default {
     },
     iconSize: 34,
     showMap: true,
-    nearBin: { lat: '', lng: '' }
+    nearestBin: { lat: '', lng: '' }
   }),
   computed: {
     dynamicSize() {
       return [this.iconSize, this.iconSize * 1.15]
     },
     dynamicAnchor() {
-      return [this.iconSize / 2, this.iconSize * 1.15]
+      return [this.iconSize / 2, this.iconSize * 1.3]
+    },
+    tooltipAnchor() {
+      return [0, -40]
     },
     styleFunction() {
       const fillColor = this.fillColor
@@ -149,7 +153,6 @@ export default {
     this.initData()
   },
   mounted() {
-    // to access object map --> this.$refs.map.mapObject
     this.geolocate()
     this.watchposition()
   },
@@ -184,7 +187,7 @@ export default {
     },
     async getNearestBin() {
       const { data } = await this.convertToUTM(this.center.lat, this.center.lng)
-      this.nearBin = this.findShortestDistance(
+      this.nearestBin = this.findShortestDistance(
         {
           X: data[0].easting,
           Y: data[0].northing
@@ -192,31 +195,31 @@ export default {
         this.allBins
       )
       const binWithLatLng = await this.convertToLatLng(
-        this.nearBin.X,
-        this.nearBin.Y
+        this.nearestBin.X,
+        this.nearestBin.Y
       )
-      this.nearBin = {
-        ...this.nearBin,
+      this.nearestBin = {
+        ...this.nearestBin,
         ...latLng(binWithLatLng.data.srcLat, binWithLatLng.data.srcLon)
       }
     },
     findShortestDistance(myPosition, positions) {
       let shortestDistance = this.calculateDistance(myPosition, positions[0])
-      let nearBin = positions[0]
+      let nearestBinPosition = positions[0]
       positions.forEach((position) => {
         const distance = this.calculateDistance(myPosition, position)
         if (distance < shortestDistance) {
           shortestDistance = distance
-          nearBin = position
+          nearestBinPosition = position
         }
       })
-      return nearBin
+      return { ...nearestBinPosition, distance: shortestDistance }
     },
     calculateDistance(pointOne, pointTwo) {
       const diffX = parseFloat(pointOne.X) - parseFloat(pointTwo.X)
       const diffY = parseFloat(pointOne.Y) - parseFloat(pointTwo.Y)
 
-      return diffX * diffX + diffY * diffY
+      return Math.sqrt(diffX * diffX + diffY * diffY)
     },
     async convertToUTM(lat, lng) {
       try {
@@ -240,7 +243,7 @@ export default {
 }
 </script>
 
-<style scoped>
+<style>
 .container {
   margin: 0 auto;
   min-height: 100vh;
@@ -275,7 +278,6 @@ export default {
 }
 
 .leaflet-tooltip {
-  font-size: 36px;
-  padding: 4px 10px !important;
+  margin-top: -20px;
 }
 </style>
