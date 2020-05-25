@@ -8,61 +8,157 @@
         Find your nearest bin 🗑
       </h2>
     </div>
-    <l-map
-      ref="map"
-      style="min-height: 100vh"
-      :zoom="zoom"
-      :center="currentPosition"
-      :options="{ zoomControl: false }"
-    >
-      <l-tile-layer :url="url"></l-tile-layer>
-    </l-map>
+    <div v-cloak id="app" style="height: 100vh; width: 100%">
+      <l-map
+        v-if="showMap"
+        :zoom="zoom"
+        :center="center"
+        :options="mapOptions"
+        style="height: 100%"
+      >
+        <l-tile-layer :url="url" :attribution="attribution"></l-tile-layer>
+        <l-control-scale
+          position="topright"
+          :imperial="false"
+          :metric="true"
+        ></l-control-scale>
+        <!-- <l-geo-json
+          :geojson="geojson"
+          :options-style="styleFunction"
+        ></l-geo-json> -->
+        <!-- <l-circle
+          :lat-lng="center"
+          :radius="circle.radius"
+          :stroke="circle.stroke"
+          :color="circle.color"
+          :weight="circle.weight"
+          :fill-color="circle.fillColor"
+        ></l-circle> -->
+        <!-- <l-circle-marker
+          :lat-lng="updatedCenter"
+          :radius="circlemarker.radius"
+          :stroke="circle.stroke"
+          :fill-color="circlemarker.fillColor"
+          :fill-opacity="circlemarker.fillOpacity"
+        >
+        </l-circle-marker> -->
+        <l-marker
+          :lat-lng.sync="center"
+          :radius="circlemarker.radius"
+          :stroke="circle.stroke"
+          :draggable="draggable"
+          :fill-color="circlemarker.fillColor"
+          :fill-opacity="circlemarker.fillOpacity"
+        >
+          <l-icon
+            :icon-size="dynamicSize"
+            :icon-anchor="dynamicAnchor"
+            icon-url="/alfiler.png"
+          >
+          </l-icon>
+        </l-marker>
+      </l-map>
+    </div>
   </div>
 </template>
 
 <script>
 import Papa from 'papaparse'
-import { LMap, LTileLayer } from 'vue2-leaflet'
+import {
+  LMap,
+  LTileLayer,
+  LMarker,
+  LControlScale,
+  // LCircleMarker,
+  LIcon
+} from 'vue2-leaflet'
+import { latLng } from 'leaflet'
 
 export default {
   components: {
     LMap,
-    LTileLayer
+    LTileLayer,
+    LMarker,
+    LControlScale,
+    // LCircleMarker,
+    LIcon
   },
   data: () => ({
     allBins: [],
-    url: 'http://{s}.tile.osm.org/{z}/{x}/{y}.png',
-    zoom: 19,
-    currentPosition: [39.4559488, -0.36372479999999996]
+    zoom: 17,
+    center: latLng(39.4559488, -0.36372479999999996),
+    updatedCenter: latLng(39.4559488, -0.36372479999999996),
+    draggable: false,
+    geojson: null,
+    url:
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    circle: {
+      center: latLng(39.4559488, -0.36372479999999996),
+      radius: 1000,
+      color: '#1CD89A',
+      weight: 2,
+      fillColor: '#1CD89A'
+    },
+    circlemarker: {
+      center: latLng(39.4559488, -0.36372479999999996),
+      radius: 6,
+      stroke: false,
+      fillColor: '#006DDC',
+      fillOpacity: 1
+    },
+    mapOptions: {
+      zoomSnap: 0.5
+    },
+    iconSize: 34,
+    showMap: true
   }),
+  computed: {
+    dynamicSize() {
+      return [this.iconSize, this.iconSize * 1.15]
+    },
+    dynamicAnchor() {
+      return [this.iconSize / 2, this.iconSize * 1.15]
+    },
+    styleFunction() {
+      const fillColor = this.fillColor
+      return () => {
+        return {
+          weight: 2,
+          color: '#1CD89A',
+          opacity: 1,
+          fillColor,
+          fillOpacity: 0.3
+        }
+      }
+    }
+  },
   created() {
     this.initData()
   },
   mounted() {
     // to access object map --> this.$refs.map.mapObject
-
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        this.currentPosition = [
-          position.coords.latitude,
-          position.coords.longitude
-        ]
-
-        this.$L
-          .circleMarker(
-            {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude
-            },
-            {
-              color: '#3388ff'
-            }
-          )
-          .addTo(this.$refs.map.mapObject)
-      })
-    }
+    this.geolocate()
+    this.watchposition()
   },
   methods: {
+    geolocate() {
+      navigator.geolocation.getCurrentPosition((position) => {
+        this.center = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        }
+      })
+    },
+    watchposition() {
+      navigator.geolocation.watchPosition((position) => {
+        this.updatedCenter = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        }
+      })
+    },
     async initData() {
       const binsData = await this.$axios.get(
         'http://mapas.valencia.es/lanzadera/opendata/Res_papeleras/CSV'
@@ -74,17 +170,6 @@ export default {
       const bins = Papa.parse(allBins, { header: true, delimiter: ';' })
       this.allBins = bins.data
     }
-    // convertUTMToLatLng(pointX, pointY) {
-    //   if (pointX && pointY) {
-    //     const point = this.$L.point(pointX, pointY)
-
-    //     const pointLatLng = this.$refs.map.mapObject.layerPointToLatLng(point)
-
-    //     return this.$L.latLng(pointLatLng)
-    //   }
-
-    //   return { lat: '', lng: '' }
-    // }
   }
 }
 </script>
@@ -110,24 +195,21 @@ export default {
     'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   display: block;
   font-weight: 300;
-  font-size: 100px;
+  font-size: 60px;
   color: #35495e;
   letter-spacing: 1px;
 }
 
 .subtitle {
   font-weight: 300;
-  font-size: 42px;
+  font-size: 22px;
   color: #526488;
   word-spacing: 5px;
   padding-bottom: 15px;
 }
 
-.links {
-  padding-top: 15px;
-}
-
-#map {
-  height: 180px;
+.leaflet-tooltip {
+  font-size: 36px;
+  padding: 4px 10px !important;
 }
 </style>
