@@ -85,6 +85,7 @@
 import Papa from 'papaparse'
 import { LMap, LTileLayer, LMarker, LControlScale, LIcon } from 'vue2-leaflet'
 import { latLng } from 'leaflet'
+import UtmObj from 'utm-latlng'
 
 export default {
   components: {
@@ -95,6 +96,7 @@ export default {
     LIcon
   },
   data: () => ({
+    utm: null,
     allBins: [],
     zoom: 17,
     center: latLng(39.4559488, -0.36372479999999996),
@@ -155,6 +157,7 @@ export default {
   mounted() {
     this.geolocate()
     this.watchposition()
+    this.utm = new UtmObj()
   },
   methods: {
     geolocate() {
@@ -185,22 +188,23 @@ export default {
       this.allBins = bins.data
       this.getNearestBin()
     },
-    async getNearestBin() {
-      const { data } = await this.convertToUTM(this.center.lat, this.center.lng)
+    getNearestBin() {
+      const data = this.convertToUTM(this.center.lat, this.center.lng)
       this.nearestBin = this.findShortestDistance(
         {
-          X: data[0].easting,
-          Y: data[0].northing
+          X: data.Easting,
+          Y: data.Northing
         },
         this.allBins
       )
-      const binWithLatLng = await this.convertToLatLng(
+      const binWithLatLng = this.convertToLatLng(
         this.nearestBin.X,
         this.nearestBin.Y
       )
+
       this.nearestBin = {
         ...this.nearestBin,
-        ...latLng(binWithLatLng.data.srcLat, binWithLatLng.data.srcLon)
+        ...latLng(binWithLatLng.lat, binWithLatLng.lng)
       }
     },
     findShortestDistance(myPosition, positions) {
@@ -221,23 +225,11 @@ export default {
 
       return Math.sqrt(diffX * diffX + diffY * diffY)
     },
-    async convertToUTM(lat, lng) {
-      try {
-        return await this.$axios.get(
-          `https://www.latlong.net/dec2utm.php?lat=${lat}&long=${lng}`
-        )
-      } catch (error) {
-        console.error(error)
-      }
+    convertToUTM(lat, lng) {
+      return this.utm.convertLatLngToUtm(lat, lng, 2)
     },
-    async convertToLatLng(pointX, pointY) {
-      try {
-        return await this.$axios.get(
-          `https://geodesy.noaa.gov/api/ncat/utm?utmZone=30&northing=${pointY}&easting=${pointX}&hemi=N&a=6378160.0&invf=298.25`
-        )
-      } catch (error) {
-        console.error(error)
-      }
+    convertToLatLng(pointX, pointY) {
+      return this.utm.convertUtmToLatLng(pointX, pointY, 30, 'S')
     }
   }
 }
